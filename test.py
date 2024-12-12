@@ -24,9 +24,9 @@ def print_system_logs(log, cycle_time):
         file.write(f"Time {time_in_seconds:.9f}s: {log}\n")
 
 
-def log_queue_state(task_queue, cycle_time):
-    queue_state = [(task.name, task.status) for task in list(task_queue.queue)]
-    log_message = f"Queue State at Time {cycle_time / Processor.clock_speed:.9f}s: {queue_state}"
+def log_all_tasks_state(memory, cycle_time):
+    task_state = [(task.name, task.status) for task in memory.tasks]
+    log_message = f"All Tasks State at Time {cycle_time / Processor.clock_speed:.9f}s: {task_state}"
     print_system_logs(log_message, cycle_time)
 
 
@@ -104,12 +104,12 @@ class Task:
 
 class RoundRobin:
     def __init__(self, time_quantum, processors_count, num_cores):
-        memory = Memory()
+        self.memory = Memory()
         self.time_quantum = time_quantum
-        self.task_queue = self.get_tasks_from_data_channel(DataChannel(memory).transmit())
+        self.task_queue = self.get_tasks_from_data_channel(DataChannel(self.memory).transmit())
         self.processors = []
         self.completed_tasks = 0
-        self.total_tasks = len(memory.tasks)
+        self.total_tasks = len(self.memory.tasks)
         self.cycle_time = 0
         for i in range(processors_count):
             processor = Processor(name=f"Processor-{i}", num_cores=num_cores)
@@ -128,7 +128,7 @@ class RoundRobin:
         active_tasks = []
         while not self.task_queue.empty() or active_tasks:
             self.cycle_time += 1
-            log_queue_state(self.task_queue, self.cycle_time)
+            log_all_tasks_state(self.memory, self.cycle_time)
             for processor in self.processors:
                 for core in processor.cores:
                     if core.status is None and not self.task_queue.empty():
@@ -181,8 +181,10 @@ class Core:
             print_proc_logs(processor_name, log_message, cycle_time)
             for _ in range(time_quantum):
                 self.current_task.run()
+                self.current_task.status = 'In work'
                 if self.current_task.remaining_operations <= 0:
                     self.end_time = cycle_time
+                    self.current_task.status = 'Completed'
                     self.record_task_time()
                     log_message = f"Task {self.current_task.name} completed successfully on Core {self.name} of Processor {processor_name}."
                     print_proc_logs(processor_name, log_message, cycle_time)
@@ -194,6 +196,7 @@ class Core:
                 log_message = f"Task {self.current_task.name} did not complete on Core {self.name} of Processor {processor_name}. Requeuing."
                 print_proc_logs(processor_name, log_message, cycle_time)
                 task_queue.put(self.current_task)
+                self.current_task.status = "In queue"
                 self.status = None
                 self.current_task = None
 
@@ -203,6 +206,7 @@ class Core:
                 task.start_time = cycle_time
             self.current_task = task
             self.status = task
+            self.current_task.status = "In work"
             return True
         return False
 
@@ -220,7 +224,7 @@ class Core:
 
 class Memory:
     def __init__(self):
-        self.tasks = [Task(name=i) for i in range(20)]
+        self.tasks = [Task(name=i) for i in range(6)]
 
 
 if __name__ == '__main__':
