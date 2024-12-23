@@ -2,7 +2,11 @@ import random # Для генерации случайных данных (ра�
 import csv # Для записи данных о выполнении задач в CSV-файл
 import time # Для имитации задержек и расчета времени
 from queue import Queue # Для реализации очереди задач
+from statistics import Statistics
 
+
+stats = Statistics()
+counter = 0
 
 # Функция для инициализации лог-файлов системы и процессоров
 def initialize_logs(processors_count):
@@ -62,8 +66,8 @@ class DataChannel:
             if task.size + frame.get_occupied_space() <= self.ethernet_frame_size - self.headers_size:
                 frame.add_task(task) # Добавляет задачу в фрейм
             else:
+                self.frames.append(frame)  # Заканчивает текущий фрейм
                 frame = Frame() # Создает новый фрейм
-                self.frames.append(frame) # Заканчивает текущий фрейм
                 frame.add_task(task) # Добавляет задачу в новый фрейм
         self.frames.append(frame) # Добавляет последний фрейм в список
         print(f"Total Ethernet frames required: {len(self.frames)}")  # Выводит количество фреймов
@@ -116,8 +120,8 @@ class Frame:
 class Task:
     def __init__(self, name):
         self.name = name # Уникальное имя задачи
-        self.ticks_to_complete = random.randint(800000, 1000000) # Время для завершения задачи в тактах
-        self.size = random.randint(1, 128) # Размер задачи в битах
+        self.ticks_to_complete = random.randint(100, 100) # Время для завершения задачи в тактах
+        self.size = 64 * random.randint(1, 100) # Размер задачи в битах
         self.remaining_operations = self.ticks_to_complete # Остаток операций (изначально равен общему количеству)
         self.status = "In queue" # Начальный статус задачи
         self.start_time = None # Время начала выполнения задачи
@@ -168,7 +172,7 @@ class RoundRobin:
         active_tasks = [] # Список активных задач, которые выполняются на ядрах
         while not self.task_queue.empty() or active_tasks:
             self.cycle_time += 1 # Увеличивает счетчик времени
-            log_all_tasks_state(self.memory, self.cycle_time) # Логирует состояние всех задач
+            # log_all_tasks_state(self.memory, self.cycle_time) # Логирует состояние всех задач
             for processor in self.processors:
                 for core in processor.cores:
                     # Если ядро свободно и очередь задач не пуста
@@ -177,7 +181,7 @@ class RoundRobin:
                         task.status = "Working" # Устанавливает статус задачи "В работе"
                         core.assign_task(task, self.cycle_time) # Назначает задачу ядру
                         log_message = f"Task {task.name} assigned to Core {core.name}."
-                        print_proc_logs(processor.name, log_message, self.cycle_time)
+                        # print_proc_logs(processor.name, log_message, self.cycle_time)
                         # Логирует факт назначения задачи
                         active_tasks.append((processor, core))  # Добавляет пару (процессор, ядро) в активные задачи
 
@@ -195,19 +199,25 @@ class RoundRobin:
 
             if self.task_queue.empty():
                 # Если очередь задач пуста, логирует завершение работы
-                print_system_logs("All tasks completed. Ending execution.", self.cycle_time)
+                # print_system_logs("All tasks completed. Ending execution.", self.cycle_time)
                 print("All tasks completed. Ending execution.")
+                for processor in self.processors:
+                    print(f'Processor {processor.name} completed {processor.completed_tasks} in {self.cycle_time/processor.clock_speed} seconds')
                 break
 
 
 # Класс, представляющий процессор с несколькими ядрами
 class Processor:
-    clock_speed = 2.5 * (10 ** 9)  # Частота процессора в герцах (2.5 ГГц)
+    clock_speed = 1 * (10 ** 9)  # Частота процессора в герцах (1 ГГц)
 
     def __init__(self, name, num_cores):
         self.name = name # Имя процессора
         # Создает список ядер с уникальными именами
         self.cores = [Core(name=f'Core-{i}') for i in range(num_cores)]
+        self.completed_tasks = 0
+
+    def increment_completed_tasks(self):
+        self.completed_tasks += 1
 
     def __str__(self):
         return self.name  # Возвращает имя процессора как строку
@@ -224,27 +234,31 @@ class Core:
 
     # Выполняет задачу с учетом временного кванта
     def execute_task(self, time_quantum, processor_name, task_queue, completed_tasks, cycle_time):
+        global counter
         if self.current_task:
             log_message = f"Core {self.name} is executing Task {self.current_task.name}. Remaining operations: {self.current_task.remaining_operations}."
-            print_proc_logs(processor_name, log_message, cycle_time) # Логирует выполнение задачи
+            # print_proc_logs(processor_name, log_message, cycle_time) # Логирует выполнение задачи
             for _ in range(time_quantum): # Выполняет задачу в рамках временного кванта
                 self.current_task.run() # Уменьшает оставшиеся такты задачи
                 self.current_task.status = 'In work'  # Обновляет статус задачи
                 if self.current_task.remaining_operations <= 0:
                     # Если задача завершена
+                    counter += 1
+                    processor = next(p for p in round_robin.processors if p.name == processor_name)
+                    processor.increment_completed_tasks()
                     self.end_time = cycle_time # Фиксирует время окончания
                     self.current_task.status = 'Completed' # Изменяет статус задачи
                     self.record_task_time(processor_name) # Сохраняет статистику выполнения задачи
-                    log_message = f"Task {self.current_task.name} completed successfully on Core {self.name} of Processor {processor_name}."
-                    print_proc_logs(processor_name, log_message, cycle_time)
+                    # log_message = f"Task {self.current_task.name} completed successfully on Core {self.name} of Processor {processor_name}."
+                    # print_proc_logs(processor_name, log_message, cycle_time)
                     completed_tasks += 1 # Увеличивает счетчик завершенных задач
                     self.status = None # Освобождает ядро
                     self.current_task = None
                     return
             if self.current_task.remaining_operations > 0:
                 # Если задача не завершена за временной квант
-                log_message = f"Task {self.current_task.name} did not complete on Core {self.name} of Processor {processor_name}. Requeuing."
-                print_proc_logs(processor_name, log_message, cycle_time)
+                # log_message = f"Task {self.current_task.name} did not complete on Core {self.name} of Processor {processor_name}. Requeuing."
+                # print_proc_logs(processor_name, log_message, cycle_time)
                 task_queue.put(self.current_task) # Возвращает задачу в очередь
                 self.current_task.status = "In queue" # Меняет статус задачи
                 self.status = None # Освобождает ядро
@@ -266,6 +280,7 @@ class Core:
         start_time_in_seconds = self.current_task.start_time / Processor.clock_speed
         end_time_in_seconds = self.end_time / Processor.clock_speed
         execution_time_in_seconds = (self.end_time - self.current_task.start_time) / Processor.clock_speed
+        stats.execution_times.append(execution_time_in_seconds)
 
         with open('task_times.csv', 'a', newline='', encoding='utf-8') as csvfile:
             writer = csv.writer(csvfile)
@@ -282,7 +297,7 @@ class Core:
 # Класс памяти, содержащий задачи
 class Memory:
     def __init__(self):
-        self.tasks = [Task(name=i) for i in range(6)] # Генерирует список задач, каждая из которых имеет уникальное имя
+        self.tasks = [Task(name=i) for i in range(100000)] # Генерирует список задач, каждая из которых имеет уникальное имя
 
 
 # Основной блок программы
@@ -299,8 +314,11 @@ if __name__ == '__main__':
             "Имя ядра" # Название столбца для имени ядра
         ])
     # Создает файлы логов для процессоров
-    initialize_logs(processors_count=2)
+    initialize_logs(processors_count=4)
     # Создает экземпляр класса RoundRobin с двумя процессорами и двумя ядрами в каждом
-    round_robin = RoundRobin(time_quantum=10, processors_count=2, num_cores=2)
+    round_robin = RoundRobin(time_quantum=10, processors_count=8, num_cores=8)
     # Запускает выполнение задач с использованием Round Robin
     round_robin.execute()
+    print(counter)
+    # print(stats.execution_times)
+    stats.print_stats()
