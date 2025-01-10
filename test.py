@@ -47,6 +47,42 @@ def log_all_tasks_state(memory, cycle_time):
     print_system_logs(log_message, cycle_time)
 
 
+def get_user_config():
+    # Настройки для каждого типа задачи
+    config = {}
+
+    print("Настройте параметры для каждого типа задачи.")
+
+    # Настройка для типа Cycling
+    config['Cycling'] = {
+        'ttl': int(input("Введите TTL для задачи типа 'Cycling': ")),
+        'tick_range': (int(input("Введите начальное количество тактов для 'Cycling': ")),
+                      int(input("Введите конечное количество тактов для 'Cycling': "))),
+        'size_range': (int(input("Введите начальный размер в битах для 'Cycling': ")),
+                       int(input("Введите конечный размер в битах для 'Cycling': ")))
+    }
+
+    # Настройка для типа Periodic
+    config['Periodic'] = {
+        'ttl': int(input("Введите TTL для задачи типа 'Periodic': ")),
+        'tick_range': (int(input("Введите начальное количество тактов для 'Periodic': ")),
+                      int(input("Введите конечное количество тактов для 'Periodic': "))),
+        'size_range': (int(input("Введите начальный размер в битах для 'Periodic': ")),
+                       int(input("Введите конечный размер в битах для 'Periodic': ")))
+    }
+
+    # Настройка для типа Impulse
+    config['Impulse'] = {
+        'ttl': int(input("Введите TTL для задачи типа 'Impulse': ")),
+        'tick_range': (int(input("Введите начальное количество тактов для 'Impulse': ")),
+                      int(input("Введите конечное количество тактов для 'Impulse': "))),
+        'size_range': (int(input("Введите начальный размер в битах для 'Impulse': ")),
+                       int(input("Введите конечный размер в битах для 'Impulse': ")))
+    }
+
+    return config
+
+
 # Класс, представляющий канал передачи данных
 class DataChannel:
     speed = 100 * (10 ** 9) # Скорость передачи данных в битах/сек (100 Гбит/с)
@@ -118,14 +154,16 @@ class Frame:
 
 
 class Task:
-    def __init__(self, name):
+    def __init__(self, name, task_type, ticks_to_complete, size, ttl):
         self.name = name # Уникальное имя задачи
-        self.ticks_to_complete = random.randint(100, 100) # Время для завершения задачи в тактах
-        self.size = 64 * random.randint(1, 100) # Размер задачи в битах
+        self.ticks_to_complete = ticks_to_complete # Время для завершения задачи в тактах
+        self.size = 64 * size # Размер задачи в битах
         self.remaining_operations = self.ticks_to_complete # Остаток операций (изначально равен общему количеству)
         self.status = "In queue" # Начальный статус задачи
         self.start_time = None # Время начала выполнения задачи
         self.end_time = None # Время завершения задачи
+        self.ttl = ttl
+        self.task_type = task_type
         # Выводит информацию о созданной задаче
         print(f"Task {self.name} created with {self.ticks_to_complete} operations and size {self.size} bits.")
 
@@ -143,8 +181,8 @@ class Task:
 
 # Класс, реализующий алгоритм планирования Round Robin
 class RoundRobin:
-    def __init__(self, time_quantum, processors_count, num_cores):
-        self.memory = Memory() # Инициализация памяти с задачами
+    def __init__(self, time_quantum, processors_count, config,num_tasks, num_cores):
+        self.memory = Memory(config, num_tasks) # Инициализация памяти с задачами
         self.time_quantum = time_quantum  # Временной квант для алгоритма Round Robin
         # Получает очередь задач из канала передачи данных
         self.task_queue = self.get_tasks_from_data_channel(DataChannel(self.memory).transmit())
@@ -296,8 +334,23 @@ class Core:
 
 # Класс памяти, содержащий задачи
 class Memory:
-    def __init__(self):
-        self.tasks = [Task(name=i) for i in range(100000)] # Генерирует список задач, каждая из которых имеет уникальное имя
+    def __init__(self, config, num_tasks):
+        self.tasks = []
+        for i in range(num_tasks):
+            task_name = i
+            task = self.generate_task(config, task_name)
+            self.tasks.append(task)
+
+    @staticmethod
+    def generate_task(config, name):
+        task_type = random.choice(list((config.keys())))
+        task_config = config[task_type]
+        # Генерация случайных значений для задачи
+        ticks_to_complete = random.randint(task_config['tick_range'][0], task_config['tick_range'][1])
+        size = random.randint(task_config['size_range'][0], task_config['size_range'][1])
+        ttl = task_config['ttl']
+        # Создаем задачу
+        return Task(name, task_type, ticks_to_complete, size, ttl)
 
 
 # Основной блок программы
@@ -313,10 +366,15 @@ if __name__ == '__main__':
             "Имя процессора",  # Название столбца для имени процессора
             "Имя ядра" # Название столбца для имени ядра
         ])
+
+    time_quantum = int(input('Пожалуйста, введите временной квант для планировщика RoundRobin:'))
+    processors_count = int(input('Пожалуйста, введите количество процессоров, участвующих в эксперименте(max=12):'))
     # Создает файлы логов для процессоров
     initialize_logs(processors_count=4)
+    user_config = get_user_config()
+    num_tasks = int(input('Введите количество задач для симуляции:'))
     # Создает экземпляр класса RoundRobin с двумя процессорами и двумя ядрами в каждом
-    round_robin = RoundRobin(time_quantum=10, processors_count=8, num_cores=8)
+    round_robin = RoundRobin(time_quantum, processors_count, user_config, num_tasks, num_cores=8)
     # Запускает выполнение задач с использованием Round Robin
     round_robin.execute()
     print(counter)
