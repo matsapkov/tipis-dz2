@@ -263,6 +263,7 @@ class RoundRobin:
             for task in frame.tasks:
                 simulate_time_delay()
                 queue.put(task) # Добавляет каждую задачу из фреймов в очередь
+        queue = sorted(queue, key=lambda task: task.ttl)
         return queue # Возвращает очередь задач
 
     # Основной метод выполнения задач
