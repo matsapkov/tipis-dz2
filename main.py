@@ -3,10 +3,32 @@ import csv # Для записи данных о выполнении задач
 import time # Для имитации задержек и расчета времени
 from queue import Queue # Для реализации очереди задач
 from pythonProject.stats.statistics import Statistics
-
+from diagrams import plot_task_counts, plot_task_type_counts, plot_ethernet_frame_load
 
 stats = Statistics()
 counter = 0
+
+delay_start = float(input('Введите начало интервала для расчета временной задержки по взаимодействию с операционной '
+                          'памятью:'))
+delay_end = float(input('Введите конец интервала для расчета временной задержки по взаимодействию с операционной '
+                        'памятью:'))
+
+
+class MemoryException(Exception):
+    def __init__(self, message='Memory overflow occured', memory_used=0, memory_limit=0):
+        self.message = message
+        self.memory_used = memory_used
+        self.memory_limit = memory_limit
+        super().__init__(self.message)
+
+    def __str__(self):
+        return f'{self.message}. Used {self.memory_used}. Memory limit {self.memory_limit}. Overflowing: {(self.memory_used/self.memory_limit) * 100}'
+
+
+def simulate_time_delay():
+    delay = random.uniform(delay_start, delay_end)
+    time.sleep(delay)
+
 
 # Функция для инициализации лог-файлов системы и процессоров
 def initialize_logs(processors_count):
@@ -35,6 +57,32 @@ def print_system_logs(log, cycle_time):
     # Добавляет запись в системный лог
     with open("SystemLOG.txt", "a", encoding="utf-8") as file:
         file.write(f"Time {time_in_seconds:.9f}s: {log}\n")
+
+
+def echo_task_requeue(task, processor_name, cycle_time):
+    log_message = f"Echo: Task {task.name} requeued at {cycle_time} from Processor {processor_name}."
+    print(log_message)  # Вывод эхо-ответа на экран
+    print_system_logs(log_message, cycle_time)  # Логирует в системный лог
+
+
+# def echo_task_assignment(task, processor_name, core_name, cycle_time):
+#     log_message = f"Echo: Task {task.name} assigned to {core_name} of Processor {processor_name}."
+#     print(log_message)  # Вывод эхо-ответа на экран
+#     print_system_logs(log_message, cycle_time)  # Логирует в системный лог
+
+
+# Логирует эхо-ответы при завершении задачи
+def echo_task_completion(task, processor_name, core_name, cycle_time):
+    log_message = f"Echo: Task {task.name} completed by {core_name} of Processor {processor_name}."
+    print(log_message)  # Вывод эхо-ответа на экран
+    print_system_logs(log_message, cycle_time)  # Логирует в системный лог
+
+
+# Логирует эхо-ответы при истечении TTL задачи
+def echo_task_ttl_expired(task, processor_name, core_name, cycle_time):
+    log_message = f"Echo: Task {task.name} TTL expired on {core_name} of Processor {processor_name}."
+    print(log_message)  # Вывод эхо-ответа на экран
+    print_system_logs(log_message, cycle_time)  # Логирует в системный лог
 
 
 # Логирует текущее состояние всех задач в памяти
@@ -115,11 +163,17 @@ class DataChannel:
     def transmit(self):
         total_frames = self.calculate_frames() # Рассчитывает фреймы
         transfer_time = 0 # Счетчик общего времени передачи
+        total_tasks_size = 0
         for frame in self.frames:
             frame_size = frame.get_occupied_space()  # Получает размер фрейма
             transfer_time += frame_size/self.speed  # Добавляет время передачи текущего фрейма
+            total_tasks_size += frame_size - self.headers_size
+            frame.frame_fill_percentage = (frame.get_occupied_space() / self.ethernet_frame_size) * 100
         print(f"Total transfer time: {transfer_time} seconds.") # Печатает общее время передачи
+        print(f"Total size of all tasks: {total_tasks_size} bits")  # Печатает общий размер всех задач
         time.sleep(transfer_time) # Имитация времени передачи данных
+        if total_tasks_size > self.memory.size:
+            raise MemoryException(memory_used=total_tasks_size, memory_limit=32*8*(1024**3))
         return self.frames  # Возвращает список фреймов
 
 
@@ -130,11 +184,12 @@ class Frame:
         self.headers_size = 144  # Размер заголовков (бит)
         self.tasks = [] # Список задач в фрейме
         self.occupied_space = 0 # Занятое пространство в фрейме (бит)
+        self.frame_fill_percentage = 0
 
     # Форматирует строковое представление фрейма
     def __str__(self):
         tasks_info = ", ".join([str(task) for task in self.tasks])
-        return f"Frame with {len(self.tasks)} tasks (Occupied space: {self.occupied_space} bits): [{tasks_info}]"
+        return f"Frame with {len(self.tasks)} tasks (Occupied space: {self.occupied_space} bits): [{tasks_info}. Fulness: {self.frame_fill_percentage}]"
 
     # Возвращает текущее занятое пространство в фрейме
     def get_occupied_space(self):
@@ -188,7 +243,8 @@ class RoundRobin:
         self.memory = Memory(config, num_tasks) # Инициализация памяти с задачами
         self.time_quantum = time_quantum  # Временной квант для алгоритма Round Robin
         # Получает очередь задач из канала передачи данных
-        self.task_queue = self.get_tasks_from_data_channel(DataChannel(self.memory).transmit())
+        self.ethernet_frames = DataChannel(self.memory).transmit()
+        self.task_queue = self.get_tasks_from_data_channel(self.ethernet_frames)
         self.processors = [] # Список процессоров
         self.completed_tasks = 0 # Количество завершенных задач
         self.total_tasks = len(self.memory.tasks) # Общее количество задач
@@ -205,6 +261,7 @@ class RoundRobin:
         queue = Queue() # Создает очередь для задач
         for frame in frames:
             for task in frame.tasks:
+                simulate_time_delay()
                 queue.put(task) # Добавляет каждую задачу из фреймов в очередь
         return queue # Возвращает очередь задач
 
@@ -256,6 +313,10 @@ class Processor:
         # Создает список ядер с уникальными именами
         self.cores = [Core(name=f'Core-{i}') for i in range(num_cores)]
         self.completed_tasks = 0
+        self.completed_tasks_for_diagram = []
+        self.cycling_tasks = []
+        self.periodic_tasks = []
+        self.impulse_tasks = []
 
     def increment_completed_tasks(self):
         self.completed_tasks += 1
@@ -273,6 +334,8 @@ class Core:
         self.start_time = None # Время начала выполнения задачи
         self.end_time = None # Время окончания выполнения задачи
         self.uncompleted_tasks = []
+        self.completed_tasks = 0
+
 
     # Выполняет задачу с учетом временного кванта
     def execute_task(self, time_quantum, processor_name, task_queue, completed_tasks, cycle_time):
@@ -290,8 +353,11 @@ class Core:
                 if self.current_task.remaining_operations <= 0:
                     # Задача завершена
                     counter += 1
+                    self.completed_tasks += 1
                     processor = next(p for p in round_robin.processors if p.name == processor_name)
                     processor.increment_completed_tasks()
+                    processor.completed_tasks_for_diagram.append(self.current_task)
+                    echo_task_completion(self.current_task, processor.name, self.name, cycle_time)
                     self.end_time = cycle_time  # Фиксирует время окончания
                     self.current_task.status = 'Completed'  # Обновляет статус задачи
                     self.record_task_time(processor_name)  # Сохраняет статистику выполнения задачи
@@ -305,6 +371,7 @@ class Core:
                 if self.current_task.ttl <= 0:
                     # TTL задачи истек
                     self.current_task.status = "TTL Expired"
+                    echo_task_ttl_expired(self.current_task, processor_name, self.name, cycle_time)
                     self.uncompleted_tasks.append(self.current_task)  # Добавляем задачу в список незавершенных
                     # log_message = f"Task {self.current_task.name} expired on Core {self.name} of Processor {processor_name}."
                     # print_proc_logs(processor_name, log_message, cycle_time)
@@ -315,6 +382,7 @@ class Core:
             # Если задача не завершена за временной квант
             if self.current_task and self.current_task.remaining_operations > 0:
                 task_queue.put(self.current_task)  # Возвращаем задачу в очередь
+                echo_task_requeue(self.current_task, processor_name, cycle_time)
                 self.current_task.status = "In queue"  # Обновляем статус задачи
                 self.status = None  # Освобождаем ядро
                 self.current_task = None
@@ -356,7 +424,9 @@ class Memory:
         for i in range(num_tasks):
             task_name = i
             task = self.generate_task(config, task_name)
+            simulate_time_delay()
             self.tasks.append(task)
+        self.size = 8 * (1024**3) * 32
 
     @staticmethod
     def generate_task(config, name):
@@ -400,3 +470,6 @@ if __name__ == '__main__':
     for processor in round_robin.processors:
         for core in processor.cores:
             print(f'Процессор {processor.name}, ядро {core.name}. Количество невыполненных задач на ядре из-за истекшего TTL: {len(core.uncompleted_tasks)}')
+    plot_task_counts(round_robin.processors)
+    plot_task_type_counts(round_robin.processors)
+    plot_ethernet_frame_load(round_robin.ethernet_frames)

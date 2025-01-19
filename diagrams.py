@@ -1,17 +1,10 @@
 import matplotlib
-matplotlib.use('TkAgg')  # Устанавливаем бэкенд до импорта pyplot
-
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 
 
 def plot_task_counts(processors):
-    """
-    Печатает гистограмму количества задач, выполненных процессорами.
-
-    :param processors: Список названий процессоров.
-    :param task_counts: Список, где каждый элемент соответствует количеству задач, выполненных соответствующим процессором.
-    """
     task_counts = []
     processors_names = []
     for processor in processors:
@@ -28,14 +21,6 @@ def plot_task_counts(processors):
 
 
 def plot_task_type_counts(processors):
-    """
-    Печатает гистограмму количества задач каждого типа, выполненных каждым процессором.
-
-    :param processors: Список названий процессоров.
-    :param task_types: Список типов задач.
-    :param task_counts: Двумерный список, где каждая строка соответствует процессору,
-                         а каждый столбец — количеству задач конкретного типа, выполненных этим процессором.
-    """
     task_types = ['cycling', 'periodic', 'impulse']
     processors_names = []
     for processor in processors:
@@ -47,20 +32,14 @@ def plot_task_type_counts(processors):
             elif task.task_type == 'Impulse':
                 processor.impulse_tasks.append(task)
     task_counts = [[len(processor.cycling_tasks), len(processor.periodic_tasks), len(processor.impulse_tasks)] for processor in processors]
-
     for processor in processors:
         processors_names.append(processor.name)
-
     x = np.arange(len(processors))  # Место для процессоров на оси X
     width = 0.15  # Ширина каждого столбца на гистограмме
     fig, ax = plt.subplots(figsize=(12, 8))
-
     task_counts = np.array(task_counts)
-    # print(task_counts)
-    # Создаем бар для каждого типа задач
     for i, task_type in enumerate(task_types):
         ax.bar(x + i * width, task_counts[:, i], width, label=task_type)
-
     ax.set_xlabel('Процессор')
     ax.set_ylabel('Количество задач')
     ax.set_title('Гистограмма количества задач каждого типа, выполненных каждым процессором')
@@ -72,12 +51,6 @@ def plot_task_type_counts(processors):
 
 
 def plot_ethernet_frame_load(ethernet_frames):
-    """
-    Печатает гистограмму загруженности Ethernet фреймов.
-
-    :param ethernet_frames: Список названий Ethernet фреймов.
-    :param load_percentages: Список с процентами загрузки для каждого Ethernet фрейма.
-    """
     load_percentages = []
     for frame in ethernet_frames:
         load_percentages.append(frame.frame_fill_percentage)
