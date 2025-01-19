@@ -170,8 +170,11 @@ class Task:
     # Метод для выполнения одного шага задачи
     def run(self):
         self.remaining_operations -= 1 # Уменьшает количество оставшихся тактов на 1
+        self.ttl -= 1
         if self.remaining_operations <= 0: # Если операции закончилис
             self.remaining_operations = 0 # Устанавливает остаток операций в 0
+        if self.ttl <= 0:
+            self.ttl = 0
         return self.remaining_operations # Возвращает количество оставшихся операций
 
     # Форматирует строковое представление задачи
@@ -269,6 +272,7 @@ class Core:
         self.current_task = None # Текущая задача, выполняемая на ядре
         self.start_time = None # Время начала выполнения задачи
         self.end_time = None # Время окончания выполнения задачи
+        self.uncompleted_tasks = []
 
     # Выполняет задачу с учетом временного кванта
     def execute_task(self, time_quantum, processor_name, task_queue, completed_tasks, cycle_time):
@@ -276,30 +280,43 @@ class Core:
         if self.current_task:
             log_message = f"Core {self.name} is executing Task {self.current_task.name}. Remaining operations: {self.current_task.remaining_operations}."
             # print_proc_logs(processor_name, log_message, cycle_time) # Логирует выполнение задачи
-            for _ in range(time_quantum): # Выполняет задачу в рамках временного кванта
-                self.current_task.run() # Уменьшает оставшиеся такты задачи
-                self.current_task.status = 'In work'  # Обновляет статус задачи
+
+            for _ in range(time_quantum):  # Выполняет задачу в рамках временного кванта
+                if self.current_task.remaining_operations > 0 and self.current_task.ttl > 0:
+                    self.current_task.run()  # Уменьшает оставшиеся операции задачи
+                    self.current_task.ttl -= 1  # Уменьшает TTL
+                    self.current_task.status = 'In work'  # Обновляет статус задачи
+
                 if self.current_task.remaining_operations <= 0:
-                    # Если задача завершена
+                    # Задача завершена
                     counter += 1
                     processor = next(p for p in round_robin.processors if p.name == processor_name)
                     processor.increment_completed_tasks()
-                    self.end_time = cycle_time # Фиксирует время окончания
-                    self.current_task.status = 'Completed' # Изменяет статус задачи
-                    self.record_task_time(processor_name) # Сохраняет статистику выполнения задачи
+                    self.end_time = cycle_time  # Фиксирует время окончания
+                    self.current_task.status = 'Completed'  # Обновляет статус задачи
+                    self.record_task_time(processor_name)  # Сохраняет статистику выполнения задачи
                     # log_message = f"Task {self.current_task.name} completed successfully on Core {self.name} of Processor {processor_name}."
                     # print_proc_logs(processor_name, log_message, cycle_time)
-                    completed_tasks += 1 # Увеличивает счетчик завершенных задач
-                    self.status = None # Освобождает ядро
+                    completed_tasks += 1  # Увеличивает счетчик завершенных задач
+                    self.status = None  # Освобождает ядро
                     self.current_task = None
                     return
-            if self.current_task.remaining_operations > 0:
-                # Если задача не завершена за временной квант
-                # log_message = f"Task {self.current_task.name} did not complete on Core {self.name} of Processor {processor_name}. Requeuing."
-                # print_proc_logs(processor_name, log_message, cycle_time)
-                task_queue.put(self.current_task) # Возвращает задачу в очередь
-                self.current_task.status = "In queue" # Меняет статус задачи
-                self.status = None # Освобождает ядро
+
+                if self.current_task.ttl <= 0:
+                    # TTL задачи истек
+                    self.current_task.status = "TTL Expired"
+                    self.uncompleted_tasks.append(self.current_task)  # Добавляем задачу в список незавершенных
+                    # log_message = f"Task {self.current_task.name} expired on Core {self.name} of Processor {processor_name}."
+                    # print_proc_logs(processor_name, log_message, cycle_time)
+                    self.status = None  # Освобождаем ядро
+                    self.current_task = None
+                    return
+
+            # Если задача не завершена за временной квант
+            if self.current_task and self.current_task.remaining_operations > 0:
+                task_queue.put(self.current_task)  # Возвращаем задачу в очередь
+                self.current_task.status = "In queue"  # Обновляем статус задачи
+                self.status = None  # Освобождаем ядро
                 self.current_task = None
 
     # Назначает задачу ядру
@@ -380,3 +397,6 @@ if __name__ == '__main__':
     print(counter)
     # print(stats.execution_times)
     stats.print_stats()
+    for processor in round_robin.processors:
+        for core in processor.cores:
+            print(f'Процессор {processor.name}, ядро {core.name}. Количество невыполненных задач на ядре из-за истекшего TTL: {len(core.uncompleted_tasks)}')
