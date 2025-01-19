@@ -8,8 +8,10 @@ from diagrams import plot_task_counts, plot_task_type_counts, plot_ethernet_fram
 stats = Statistics()
 counter = 0
 
-delay_start = float(input('Введите начало интервала для расчета временной задержки по взаимодействию с операционной памятью'))
-delay_end = float(input('Введите конец интервала для расчета временной задержки по взаимодействию с операционной памятью'))
+delay_start = float(input('Введите начало интервала для расчета временной задержки по взаимодействию с операционной '
+                          'памятью:'))
+delay_end = float(input('Введите конец интервала для расчета временной задержки по взаимодействию с операционной '
+                        'памятью:'))
 
 
 class MemoryException(Exception):
@@ -165,7 +167,7 @@ class DataChannel:
         for frame in self.frames:
             frame_size = frame.get_occupied_space()  # Получает размер фрейма
             transfer_time += frame_size/self.speed  # Добавляет время передачи текущего фрейма
-            total_tasks_size += frame_size - self.headers_size * len(self.frames)
+            total_tasks_size += frame_size - self.headers_size
             frame.frame_fill_percentage = (frame.get_occupied_space() / self.ethernet_frame_size) * 100
         print(f"Total transfer time: {transfer_time} seconds.") # Печатает общее время передачи
         print(f"Total size of all tasks: {total_tasks_size} bits")  # Печатает общий размер всех задач

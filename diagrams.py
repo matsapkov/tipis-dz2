@@ -1,3 +1,6 @@
+import matplotlib
+matplotlib.use('TkAgg')  # Устанавливаем бэкенд до импорта pyplot
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -37,11 +40,11 @@ def plot_task_type_counts(processors):
     processors_names = []
     for processor in processors:
         for task in processor.completed_tasks_for_diagram:
-            if task.task_type == 'cycling':
+            if task.task_type == 'Cycling':
                 processor.cycling_tasks.append(task)
-            elif task.task_type == 'periodic':
+            elif task.task_type == 'Periodic':
                 processor.periodic_tasks.append(task)
-            elif task.task_type == 'impulse':
+            elif task.task_type == 'Impulse':
                 processor.impulse_tasks.append(task)
     task_counts = [[len(processor.cycling_tasks), len(processor.periodic_tasks), len(processor.impulse_tasks)] for processor in processors]
 
@@ -53,7 +56,7 @@ def plot_task_type_counts(processors):
     fig, ax = plt.subplots(figsize=(12, 8))
 
     task_counts = np.array(task_counts)
-    print(task_counts)
+    # print(task_counts)
     # Создаем бар для каждого типа задач
     for i, task_type in enumerate(task_types):
         ax.bar(x + i * width, task_counts[:, i], width, label=task_type)
@@ -79,7 +82,10 @@ def plot_ethernet_frame_load(ethernet_frames):
     for frame in ethernet_frames:
         load_percentages.append(frame.frame_fill_percentage)
     plt.figure(figsize=(10, 6))
-    plt.bar(ethernet_frames, load_percentages, color='lightcoral')
+    indices = []
+    for i in range(len(ethernet_frames)):
+        indices.append(i)
+    plt.bar(indices, load_percentages, color='lightcoral')
     plt.xlabel('Ethernet фрейм')
     plt.ylabel('Загруженность (%)')
     plt.title('Гистограмма загруженности Ethernet фреймов')
