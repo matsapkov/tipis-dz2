@@ -65,3 +65,49 @@ def plot_ethernet_frame_load(ethernet_frames):
     plt.xticks(rotation=45)
     plt.tight_layout()
     plt.show()
+
+
+def plot_task_distribution_by_cores(processors):
+    """
+    Построить гистограммы распределения задач по ядрам для каждого процессора.
+
+    :param processors: Список процессоров. У каждого процессора есть ядра и выполненные задачи.
+    """
+    task_types = ['Cycling', 'Periodic', 'Impulse']
+
+    for processor in processors:
+        # Собираем данные для каждого ядра
+        core_names = [core.name for core in processor.cores]
+        core_task_counts = []  # Массив количества задач для каждого ядра
+        cycling_count = 0
+        impulse_count = 0
+        periodic_count = 0
+        for core in processor.cores:
+            for task in core.completed_task_for_diagram:
+                if task.task_type == 'Cycling':
+                    cycling_count += 1
+                if task.task_type == 'Periodic':
+                    periodic_count += 1
+                if task.task_type == 'Impulse':
+                    impulse_count += 1
+
+            core_task_counts.append([cycling_count, periodic_count, impulse_count])
+
+        core_task_counts = np.array(core_task_counts)  # Преобразуем в массив для удобства
+
+        # Построение гистограммы для данного процессора
+        x = np.arange(len(core_names))  # Индексы для ядер
+        width = 0.2  # Ширина столбцов
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+        for i, task_type in enumerate(task_types):
+            ax.bar(x + i * width, core_task_counts[:, i], width, label=task_type)
+
+        ax.set_xlabel('Ядра')
+        ax.set_ylabel('Количество задач')
+        ax.set_title(f'Распределение задач по ядрам процессора {processor.name}')
+        ax.set_xticks(x + width * (len(task_types) - 1) / 2)
+        ax.set_xticklabels(core_names, rotation=45)
+        ax.legend(title='Типы задач')
+        plt.tight_layout()
+        plt.show()

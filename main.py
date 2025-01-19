@@ -3,7 +3,7 @@ import csv # Для записи данных о выполнении задач
 import time # Для имитации задержек и расчета времени
 from queue import Queue # Для реализации очереди задач
 from pythonProject.stats.statistics import Statistics
-from diagrams import plot_task_counts, plot_task_type_counts, plot_ethernet_frame_load
+from diagrams import plot_task_counts, plot_task_type_counts, plot_ethernet_frame_load, plot_task_distribution_by_cores
 
 stats = Statistics()
 counter = 0
@@ -263,7 +263,7 @@ class RoundRobin:
             for task in frame.tasks:
                 simulate_time_delay()
                 queue.put(task) # Добавляет каждую задачу из фреймов в очередь
-        queue = sorted(queue, key=lambda task: task.ttl)
+        # queue = sorted(queue, key=lambda task: task.ttl)
         return queue # Возвращает очередь задач
 
     # Основной метод выполнения задач
@@ -336,6 +336,7 @@ class Core:
         self.end_time = None # Время окончания выполнения задачи
         self.uncompleted_tasks = []
         self.completed_tasks = 0
+        self.completed_task_for_diagram = []
 
 
     # Выполняет задачу с учетом временного кванта
@@ -358,6 +359,7 @@ class Core:
                     processor = next(p for p in round_robin.processors if p.name == processor_name)
                     processor.increment_completed_tasks()
                     processor.completed_tasks_for_diagram.append(self.current_task)
+                    self.completed_task_for_diagram.append(self.current_task)
                     echo_task_completion(self.current_task, processor.name, self.name, cycle_time)
                     self.end_time = cycle_time  # Фиксирует время окончания
                     self.current_task.status = 'Completed'  # Обновляет статус задачи
@@ -474,3 +476,4 @@ if __name__ == '__main__':
     plot_task_counts(round_robin.processors)
     plot_task_type_counts(round_robin.processors)
     plot_ethernet_frame_load(round_robin.ethernet_frames)
+    plot_task_distribution_by_cores(round_robin.processors)
